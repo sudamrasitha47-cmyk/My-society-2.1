@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>My Society</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: #2a2a3d;
+    --accent: #c8a96e;
+    --accent2: #e8c990;
+    --text: #f0ede8;
+    --muted: #7a7a9a;
+    --danger: #e05c5c;
+    --success: #5ce08a;
+    --card-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+  /* GRAIN OVERLAY */
+  body::before{
+    content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    opacity:0.4;
+  }
+
+  /* NAV */
+  nav{
+    position:fixed;top:0;left:0;right:0;z-index:100;
+    background:rgba(10,10,15,0.85);backdrop-filter:blur(20px);
+    border-bottom:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 2rem;height:64px;
+  }
+  .nav-logo{
+    font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:900;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    letter-spacing:-0.02em;cursor:pointer;
+  }
+  .nav-right{display:flex;align-items:center;gap:1rem;}
+  .nav-btn{
+    background:none;border:1px solid var(--border);color:var(--text);
+    padding:0.4rem 1rem;border-radius:8px;cursor:pointer;font-size:0.85rem;
+    font-family:'DM Sans',sans-serif;transition:all 0.2s;
+  }
+  .nav-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .nav-btn.primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600;}
+  .nav-btn.primary:hover{background:var(--accent2);}
+  #adminIndicator{
+    display:none;align-items:center;gap:0.5rem;font-size:0.8rem;color:var(--accent);
+    background:rgba(200,169,110,0.1);padding:0.3rem 0.8rem;border-radius:6px;
+    border:1px solid rgba(200,169,110,0.3);
+  }
+
+  /* PAGES */
+  .page{display:none;padding-top:64px;}
+  .page.active{display:block;}
+
+  /* AUTH PAGE */
+  #authPage{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 0%,rgba(200,169,110,0.08) 0%,transparent 60%);
+  }
+  .auth-container{width:100%;max-width:420px;padding:1rem;}
+  .auth-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:20px;
+    padding:2.5rem;box-shadow:var(--card-shadow);
+  }
+  .auth-title{font-family:'Playfair Display',serif;font-size:1.8rem;margin-bottom:0.3rem;}
+  .auth-sub{color:var(--muted);font-size:0.9rem;margin-bottom:2rem;}
+  .auth-tabs{display:flex;gap:0.5rem;margin-bottom:2rem;}
+  .auth-tab{
+    flex:1;padding:0.6rem;background:var(--surface2);border:1px solid var(--border);
+    border-radius:8px;color:var(--muted);cursor:pointer;font-size:0.9rem;
+    font-family:'DM Sans',sans-serif;transition:all 0.2s;
+  }
+  .auth-tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600;}
+  .form-group{margin-bottom:1.2rem;}
+  .form-label{display:block;font-size:0.82rem;color:var(--muted);margin-bottom:0.4rem;letter-spacing:0.05em;}
+  .form-input{
+    width:100%;background:var(--surface2);border:1px solid var(--border);
+    color:var(--text);padding:0.75rem 1rem;border-radius:10px;font-size:0.95rem;
+    font-family:'DM Sans',sans-serif;transition:border-color 0.2s;outline:none;
+  }
+  .form-input:focus{border-color:var(--accent);}
+  .form-input::placeholder{color:var(--muted);}
+  .auth-submit{
+    width:100%;padding:0.85rem;background:linear-gradient(135deg,var(--accent),var(--accent2));
+    border:none;border-radius:10px;color:#000;font-weight:700;font-size:1rem;
+    cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity 0.2s;margin-top:0.5rem;
+  }
+  .auth-submit:hover{opacity:0.9;}
+  .auth-msg{font-size:0.85rem;text-align:center;margin-top:1rem;min-height:1.2em;}
+  .auth-msg.err{color:var(--danger);}
+  .auth-msg.ok{color:var(--success);}
+
+  /* FEED PAGE */
+  #feedPage{min-height:100vh;}
+  .feed-hero{
+    padding:4rem 2rem 2rem;text-align:center;
+    background:radial-gradient(ellipse at 50% 0%,rgba(200,169,110,0.06) 0%,transparent 70%);
+  }
+  .feed-hero-title{
+    font-family:'Playfair Display',serif;font-size:clamp(2rem,5vw,3.5rem);
+    font-weight:900;line-height:1.1;
+    background:linear-gradient(135deg,var(--text) 0%,var(--accent) 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .feed-hero-sub{color:var(--muted);margin-top:0.5rem;font-size:1rem;}
+  .feed-wrap{max-width:680px;margin:0 auto;padding:2rem 1rem 4rem;}
+  .post-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    margin-bottom:1.5rem;overflow:hidden;
+    box-shadow:0 4px 24px rgba(0,0,0,0.3);
+    animation:fadeUp 0.4s ease both;
+    transition:transform 0.2s,box-shadow 0.2s;
+  }
+  .post-card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.4);}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+  .post-img{width:100%;max-height:480px;object-fit:cover;display:block;}
+  .post-body{padding:1.2rem 1.4rem;}
+  .post-meta{
+    display:flex;align-items:center;gap:0.6rem;margin-bottom:0.8rem;
+  }
+  .post-avatar{
+    width:36px;height:36px;border-radius:50%;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:0.85rem;color:#000;flex-shrink:0;
+  }
+  .post-author{font-weight:600;font-size:0.9rem;}
+  .post-time{color:var(--muted);font-size:0.78rem;margin-left:auto;}
+  .post-text{font-size:0.95rem;line-height:1.6;color:var(--text);white-space:pre-wrap;word-break:break-word;}
+  .post-actions{
+    display:flex;align-items:center;gap:0.5rem;padding:0.8rem 1.4rem;
+    border-top:1px solid var(--border);
+  }
+  .action-btn{
+    display:flex;align-items:center;gap:0.4rem;
+    background:none;border:none;color:var(--muted);cursor:pointer;
+    padding:0.4rem 0.7rem;border-radius:8px;font-size:0.85rem;
+    font-family:'DM Sans',sans-serif;transition:all 0.2s;
+  }
+  .action-btn:hover{background:var(--surface2);color:var(--text);}
+  .action-btn.liked{color:#e05c7a;}
+  .action-btn svg{width:18px;height:18px;}
+  .share-btn{margin-left:auto;}
+  .comments-section{padding:0 1.4rem 1rem;border-top:1px solid var(--border);}
+  .comment-item{
+    padding:0.6rem 0;border-bottom:1px solid rgba(42,42,61,0.5);
+    font-size:0.85rem;line-height:1.4;
+  }
+  .comment-item:last-child{border-bottom:none;}
+  .comment-author{font-weight:600;color:var(--accent);margin-right:0.4rem;}
+  .comment-form{display:flex;gap:0.5rem;margin-top:0.8rem;}
+  .comment-input{
+    flex:1;background:var(--surface2);border:1px solid var(--border);
+    color:var(--text);padding:0.5rem 0.8rem;border-radius:8px;font-size:0.85rem;
+    font-family:'DM Sans',sans-serif;outline:none;
+  }
+  .comment-input:focus{border-color:var(--accent);}
+  .comment-input::placeholder{color:var(--muted);}
+  .comment-submit{
+    background:var(--accent);border:none;color:#000;padding:0.5rem 0.9rem;
+    border-radius:8px;cursor:pointer;font-weight:600;font-size:0.82rem;
+    font-family:'DM Sans',sans-serif;transition:opacity 0.2s;
+  }
+  .comment-submit:hover{opacity:0.85;}
+  .empty-feed{text-align:center;padding:4rem 2rem;color:var(--muted);}
+  .empty-feed svg{width:48px;height:48px;opacity:0.3;margin-bottom:1rem;}
+  .empty-feed p{font-size:1.1rem;}
+
+  /* ADMIN PAGE */
+  #adminPage{min-height:100vh;background:var(--bg);}
+  .admin-wrap{max-width:800px;margin:0 auto;padding:2rem 1rem 4rem;}
+  .admin-header{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid var(--border);
+  }
+  .admin-title{font-family:'Playfair Display',serif;font-size:1.8rem;}
+  .admin-badge{
+    background:rgba(200,169,110,0.15);color:var(--accent);
+    border:1px solid rgba(200,169,110,0.3);padding:0.3rem 0.8rem;
+    border-radius:6px;font-size:0.8rem;font-weight:600;
+  }
+  .admin-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    padding:2rem;margin-bottom:2rem;box-shadow:var(--card-shadow);
+  }
+  .admin-section-title{
+    font-size:1rem;font-weight:600;margin-bottom:1.5rem;
+    color:var(--accent);letter-spacing:0.05em;text-transform:uppercase;font-size:0.82rem;
+  }
+  .img-options{display:flex;gap:0.5rem;margin-bottom:1rem;}
+  .img-opt-btn{
+    flex:1;padding:0.5rem;background:var(--surface2);border:1px solid var(--border);
+    color:var(--muted);border-radius:8px;cursor:pointer;font-size:0.82rem;
+    font-family:'DM Sans',sans-serif;transition:all 0.2s;
+  }
+  .img-opt-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(200,169,110,0.08);}
+  .img-preview{
+    width:100%;height:200px;border-radius:10px;object-fit:cover;
+    border:1px solid var(--border);margin-top:0.8rem;display:none;
+  }
+  .upload-area{
+    border:2px dashed var(--border);border-radius:10px;padding:2rem;
+    text-align:center;cursor:pointer;transition:border-color 0.2s;margin-top:0.8rem;
+  }
+  .upload-area:hover{border-color:var(--accent);}
+  .upload-area input{display:none;}
+  .upload-area svg{width:32px;height:32px;color:var(--muted);margin:0 auto 0.5rem;}
+  .upload-area p{color:var(--muted);font-size:0.85rem;}
+  .char-count{font-size:0.75rem;color:var(--muted);text-align:right;margin-top:0.3rem;}
+  .publish-btn{
+    width:100%;padding:0.9rem;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    border:none;border-radius:10px;color:#000;font-weight:700;font-size:1rem;
+    cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity 0.2s;
+    display:flex;align-items:center;justify-content:center;gap:0.5rem;
+  }
+  .publish-btn:hover{opacity:0.9;}
+  .publish-btn:disabled{opacity:0.5;cursor:not-allowed;}
+  .post-status{font-size:0.85rem;text-align:center;margin-top:0.8rem;min-height:1.2em;}
+  .post-status.ok{color:var(--success);}
+  .post-status.err{color:var(--danger);}
+
+  /* Admin posts list */
+  .admin-post-item{
+    display:flex;align-items:center;gap:1rem;padding:1rem 0;
+    border-bottom:1px solid var(--border);
+  }
+  .admin-post-item:last-child{border-bottom:none;}
+  .admin-post-thumb{
+    width:60px;height:60px;border-radius:8px;object-fit:cover;flex-shrink:0;
+    background:var(--surface2);border:1px solid var(--border);
+  }
+  .admin-post-info{flex:1;min-width:0;}
+  .admin-post-text{font-size:0.85rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .admin-post-stats{font-size:0.75rem;color:var(--muted);margin-top:0.2rem;}
+  .delete-btn{
+    background:none;border:1px solid rgba(224,92,92,0.3);color:var(--danger);
+    padding:0.3rem 0.6rem;border-radius:6px;cursor:pointer;font-size:0.78rem;
+    font-family:'DM Sans',sans-serif;transition:all 0.2s;flex-shrink:0;
+  }
+  .delete-btn:hover{background:rgba(224,92,92,0.1);}
+
+  /* MODAL */
+  .modal-overlay{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);
+    z-index:200;align-items:center;justify-content:center;padding:1rem;
+    backdrop-filter:blur(4px);
+  }
+  .modal-overlay.open{display:flex;}
+  .modal{
+    background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    padding:2rem;max-width:440px;width:100%;box-shadow:var(--card-shadow);
+  }
+  .modal-title{font-family:'Playfair Display',serif;font-size:1.3rem;margin-bottom:1rem;}
+  .modal-close{
+    float:right;background:none;border:none;color:var(--muted);cursor:pointer;
+    font-size:1.2rem;line-height:1;
+  }
+  .share-link{
+    background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+    padding:0.7rem 1rem;font-size:0.82rem;color:var(--muted);word-break:break-all;
+    margin-bottom:1rem;
+  }
+  .copy-btn{
+    width:100%;padding:0.7rem;background:var(--accent);color:#000;
+    border:none;border-radius:8px;font-weight:700;cursor:pointer;
+    font-family:'DM Sans',sans-serif;transition:opacity 0.2s;
+  }
+  .copy-btn:hover{opacity:0.9;}
+
+  /* TOAST */
+  .toast{
+    position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(100px);
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:0.8rem 1.4rem;font-size:0.9rem;z-index:300;
+    transition:transform 0.3s ease;box-shadow:var(--card-shadow);
+  }
+  .toast.show{transform:translateX(-50%) translateY(0);}
+  .toast.ok{border-color:var(--success);color:var(--success);}
+  .toast.err{border-color:var(--danger);color:var(--danger);}
+
+  /* LOADING */
+  .spinner{
+    width:32px;height:32px;border:3px solid var(--border);
+    border-top-color:var(--accent);border-radius:50%;
+    animation:spin 0.8s linear infinite;margin:2rem auto;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* RESPONSIVE */
+  @media(max-width:600px){
+    nav{padding:0 1rem;}
+    .feed-wrap,.admin-wrap{padding:1rem 0.8rem 4rem;}
+    .admin-card{padding:1.2rem;}
+    .post-body,.post-actions{padding-left:1rem;padding-right:1rem;}
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo" onclick="showPage('feed')">My Society</div>
+  <div class="nav-right">
+    <span id="adminIndicator">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+      Admin
+    </span>
+    <button class="nav-btn" id="authNavBtn" onclick="showPage('auth')">Sign In</button>
+    <button class="nav-btn primary" id="adminNavBtn" onclick="showPage('admin')" style="display:none">Dashboard</button>
+    <button class="nav-btn" id="signoutBtn" onclick="signOut()" style="display:none">Sign Out</button>
+  </div>
+</nav>
+
+<!-- AUTH PAGE -->
+<div class="page" id="authPage">
+  <div id="authPageInner" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,rgba(200,169,110,0.08) 0%,transparent 60%);">
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="auth-title">Welcome Back</div>
+        <div class="auth-sub">Sign in to join the conversation</div>
+        <div class="auth-tabs">
+          <button class="auth-tab active" onclick="switchTab('login')">Sign In</button>
+          <button class="auth-tab" onclick="switchTab('signup')">Sign Up</button>
+        </div>
+
+        <!-- LOGIN -->
+        <div id="loginForm">
+          <div class="form-group">
+            <label class="form-label">EMAIL</label>
+            <input class="form-input" type="email" id="loginEmail" placeholder="your@email.com"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">PASSWORD</label>
+            <input class="form-input" type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
+          </div>
+          <button class="auth-submit" onclick="doLogin()">Sign In</button>
+          <div class="auth-msg" id="loginMsg"></div>
+        </div>
+
+        <!-- SIGNUP -->
+        <div id="signupForm" style="display:none">
+          <div class="form-group">
+            <label class="form-label">DISPLAY NAME</label>
+            <input class="form-input" type="text" id="signupName" placeholder="Your name"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">EMAIL</label>
+            <input class="form-input" type="email" id="signupEmail" placeholder="your@email.com"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">PASSWORD</label>
+            <input class="form-input" type="password" id="signupPass" placeholder="Min 6 characters" onkeydown="if(event.key==='Enter')doSignup()"/>
+          </div>
+          <button class="auth-submit" onclick="doSignup()">Create Account</button>
+          <div class="auth-msg" id="signupMsg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FEED PAGE -->
+<div class="page active" id="feedPage">
+  <div class="feed-hero">
+    <div class="feed-hero-title">My Society</div>
+    <div class="feed-hero-sub">Stories, moments & conversations</div>
+  </div>
+  <div class="feed-wrap">
+    <div id="feedContainer"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- ADMIN PAGE -->
+<div class="page" id="adminPage">
+  <div class="admin-wrap">
+    <div class="admin-header">
+      <div>
+        <div class="admin-title">Dashboard</div>
+        <div style="color:var(--muted);font-size:0.85rem;margin-top:0.2rem;">Create and manage posts</div>
+      </div>
+      <div class="admin-badge">ADMIN</div>
+    </div>
+
+    <!-- CREATE POST -->
+    <div class="admin-card">
+      <div class="admin-section-title">✦ Create New Post</div>
+
+      <div class="form-group">
+        <label class="form-label">IMAGE (OPTIONAL)</label>
+        <div class="img-options">
+          <button class="img-opt-btn active" onclick="setImgMode('url')">🔗 Image URL</button>
+          <button class="img-opt-btn" onclick="setImgMode('upload')">📁 Upload File</button>
+          <button class="img-opt-btn" onclick="setImgMode('none')">✕ No Image</button>
+        </div>
+        <div id="imgUrlGroup">
+          <input class="form-input" type="url" id="imgUrlInput" placeholder="https://example.com/photo.jpg" oninput="previewImg()"/>
+          <img id="imgUrlPreview" class="img-preview"/>
+        </div>
+        <div id="imgUploadGroup" style="display:none">
+          <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <input type="file" id="fileInput" accept="image/*" onchange="handleFile(event)"/>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <p>Click to choose an image</p>
+          </div>
+          <img id="filePreview" class="img-preview"/>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">POST TEXT</label>
+        <textarea class="form-input" id="postText" rows="5" placeholder="What's on your mind? Share with the society..." style="resize:vertical;" oninput="updateChar()"></textarea>
+        <div class="char-count" id="charCount">0 / 2000</div>
+      </div>
+
+      <button class="publish-btn" id="publishBtn" onclick="publishPost()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Publish Post
+      </button>
+      <div class="post-status" id="postStatus"></div>
+    </div>
+
+    <!-- MANAGE POSTS -->
+    <div class="admin-card">
+      <div class="admin-section-title">✦ Your Posts</div>
+      <div id="adminPostsList"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SHARE MODAL -->
+<div class="modal-overlay" id="shareModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">Share Post</div>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1rem;">Copy this link to share with anyone</p>
+    <div class="share-link" id="shareLink"></div>
+    <button class="copy-btn" onclick="copyLink()">Copy Link</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── SUPABASE INIT ───────────────────────────────────────────────
+const SUPABASE_URL = 'https://pdiovhgrctqmbovtahlc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_9TBxbYMrgf7k_iSkKtpn7A_0Aeapm4D';
+const ADMIN_EMAIL  = 'sudamrasitha77@gmail.com';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ─── STATE ───────────────────────────────────────────────────────
+let currentUser  = null;
+let isAdmin      = false;
+let imgMode      = 'url';
+let fileBase64   = null;
+let realtimeSub  = null;
+
+// ─── INIT ────────────────────────────────────────────────────────
+async function init() {
+  const { data:{ session } } = await sb.auth.getSession();
+  if (session) await handleSession(session);
+  await loadFeed();
+  setupRealtime();
+
+  // Check URL for shared post scroll
+  const hash = window.location.hash;
+  if (hash.startsWith('#post-')) {
+    setTimeout(() => {
+      const el = document.getElementById(hash.slice(1));
+      if (el) el.scrollIntoView({ behavior:'smooth' });
+    }, 800);
+  }
+}
+
+// ─── AUTH STATE ──────────────────────────────────────────────────
+async function handleSession(session) {
+  currentUser = session.user;
+  isAdmin     = currentUser.email === ADMIN_EMAIL;
+
+  document.getElementById('authNavBtn').style.display  = 'none';
+  document.getElementById('signoutBtn').style.display  = 'inline-block';
+  if (isAdmin) {
+    document.getElementById('adminNavBtn').style.display    = 'inline-block';
+    document.getElementById('adminIndicator').style.display = 'flex';
+  }
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  currentUser = null; isAdmin = false;
+  document.getElementById('authNavBtn').style.display     = 'inline-block';
+  document.getElementById('signoutBtn').style.display     = 'none';
+  document.getElementById('adminNavBtn').style.display    = 'none';
+  document.getElementById('adminIndicator').style.display = 'none';
+  showPage('feed');
+  showToast('Signed out', 'ok');
+}
+
+// ─── AUTH TABS ───────────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('loginForm').style.display  = tab==='login'  ? 'block' : 'none';
+  document.getElementById('signupForm').style.display = tab==='signup' ? 'block' : 'none';
+  document.querySelectorAll('.auth-tab').forEach((b,i) => b.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='signup')));
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  const msg   = document.getElementById('loginMsg');
+  msg.textContent = 'Signing in…'; msg.className = 'auth-msg';
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { msg.textContent = error.message; msg.className = 'auth-msg err'; return; }
+
+  await handleSession(data.session);
+  msg.textContent = ''; 
+
+  if (data.user.email === ADMIN_EMAIL) {
+    showPage('admin');
+    loadAdminPosts();
+  } else {
+    showPage('feed');
+  }
+  showToast('Welcome back!', 'ok');
+}
+
+async function doSignup() {
+  const name  = document.getElementById('signupName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const pass  = document.getElementById('signupPass').value;
+  const msg   = document.getElementById('signupMsg');
+
+  if (!name) { msg.textContent = 'Please enter your name'; msg.className='auth-msg err'; return; }
+  msg.textContent = 'Creating account…'; msg.className = 'auth-msg';
+
+  const { data, error } = await sb.auth.signUp({
+    email, password: pass,
+    options: { data: { display_name: name } }
+  });
+  if (error) { msg.textContent = error.message; msg.className = 'auth-msg err'; return; }
+  msg.textContent = 'Account created! Check your email or sign in now.';
+  msg.className = 'auth-msg ok';
+}
+
+// ─── PAGE ROUTING ─────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(name+'Page').classList.add('active');
+  if (name === 'admin' && !isAdmin) { showPage('auth'); return; }
+  if (name === 'admin') loadAdminPosts();
+  window.scrollTo(0,0);
+}
+
+// ─── FEED ─────────────────────────────────────────────────────────
+async function loadFeed() {
+  const container = document.getElementById('feedContainer');
+  const { data: posts, error } = await sb
+    .from('posts')
+    .select('*, comments(id), likes(id)')
+    .order('created_at', { ascending: false });
+
+  if (error) { container.innerHTML = '<div class="empty-feed"><p>Failed to load posts.</p></div>'; return; }
+  if (!posts.length) {
+    container.innerHTML = `<div class="empty-feed">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 9h18M9 21V9"/></svg>
+      <p>No posts yet. Check back soon!</p>
+    </div>`;
+    return;
+  }
+  container.innerHTML = posts.map(p => renderPostCard(p)).join('');
+}
+
+function renderPostCard(post) {
+  const date   = new Date(post.created_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+  const imgHtml = post.image_url ? `<img class="post-img" src="${escHtml(post.image_url)}" loading="lazy" onerror="this.style.display='none'"/>` : '';
+  const textHtml = post.text ? `<div class="post-text">${escHtml(post.text)}</div>` : '';
+  const likeCount = post.likes ? post.likes.length : 0;
+  const commentCount = post.comments ? post.comments.length : 0;
+
+  return `<div class="post-card" id="post-${post.id}">
+    ${imgHtml}
+    <div class="post-body">
+      <div class="post-meta">
+        <div class="post-avatar">MS</div>
+        <div class="post-author">My Society</div>
+        <div class="post-time">${date}</div>
+      </div>
+      ${textHtml}
+    </div>
+    <div class="post-actions">
+      <button class="action-btn" id="likeBtn-${post.id}" onclick="toggleLike('${post.id}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="likeCount-${post.id}">${likeCount}</span>
+      </button>
+      <button class="action-btn" onclick="toggleComments('${post.id}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>${commentCount}</span>
+      </button>
+      <button class="action-btn share-btn" onclick="sharePost('${post.id}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Share
+      </button>
+    </div>
+    <div class="comments-section" id="comments-${post.id}" style="display:none">
+      <div id="commentsList-${post.id}"><div style="color:var(--muted);font-size:0.82rem;padding:0.5rem 0;">Loading…</div></div>
+      <div class="comment-form">
+        <input class="comment-input" id="commentInput-${post.id}" placeholder="${currentUser ? 'Add a comment…' : 'Sign in to comment'}"/>
+        <button class="comment-submit" onclick="submitComment('${post.id}')">Post</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── REALTIME ─────────────────────────────────────────────────────
+function setupRealtime() {
+  sb.channel('public:posts')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, payload => {
+      const container = document.getElementById('feedContainer');
+      const emptyEl = container.querySelector('.empty-feed');
+      if (emptyEl) container.innerHTML = '';
+      const div = document.createElement('div');
+      div.innerHTML = renderPostCard(payload.new);
+      container.prepend(div.firstChild);
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'posts' }, payload => {
+      const el = document.getElementById('post-'+payload.old.id);
+      if (el) el.remove();
+    })
+    .subscribe();
+
+  sb.channel('public:likes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, async payload => {
+      const postId = payload.new?.post_id || payload.old?.post_id;
+      if (!postId) return;
+      const { count } = await sb.from('likes').select('*', { count:'exact', head:true }).eq('post_id', postId);
+      const el = document.getElementById('likeCount-'+postId);
+      if (el) el.textContent = count || 0;
+    })
+    .subscribe();
+}
+
+// ─── LIKES ────────────────────────────────────────────────────────
+async function toggleLike(postId) {
+  if (!currentUser) { showPage('auth'); showToast('Sign in to like posts', 'err'); return; }
+  const btn = document.getElementById('likeBtn-'+postId);
+  const { data: existing } = await sb.from('likes').select('id').eq('post_id', postId).eq('user_id', currentUser.id).single();
+
+  if (existing) {
+    await sb.from('likes').delete().eq('id', existing.id);
+    btn.classList.remove('liked');
+  } else {
+    await sb.from('likes').insert({ post_id: postId, user_id: currentUser.id });
+    btn.classList.add('liked');
+  }
+}
+
+// ─── COMMENTS ─────────────────────────────────────────────────────
+async function toggleComments(postId) {
+  const section = document.getElementById('comments-'+postId);
+  const isHidden = section.style.display === 'none';
+  section.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) await loadComments(postId);
+}
+
+async function loadComments(postId) {
+  const list = document.getElementById('commentsList-'+postId);
+  const { data: comments } = await sb.from('comments').select('*').eq('post_id', postId).order('created_at', { ascending:true });
+  if (!comments || !comments.length) { list.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;padding:0.5rem 0;">No comments yet. Be first!</div>'; return; }
+  list.innerHTML = comments.map(c => `
+    <div class="comment-item">
+      <span class="comment-author">${escHtml(c.author_name || 'User')}</span>
+      ${escHtml(c.text)}
+    </div>`).join('');
+}
+
+async function submitComment(postId) {
+  if (!currentUser) { showPage('auth'); showToast('Sign in to comment', 'err'); return; }
+  const input = document.getElementById('commentInput-'+postId);
+  const text  = input.value.trim();
+  if (!text) return;
+  const name = currentUser.user_metadata?.display_name || currentUser.email.split('@')[0];
+  const { error } = await sb.from('comments').insert({ post_id: postId, user_id: currentUser.id, author_name: name, text });
+  if (!error) { input.value = ''; await loadComments(postId); }
+}
+
+// ─── SHARE ────────────────────────────────────────────────────────
+function sharePost(postId) {
+  const url = `${window.location.origin}${window.location.pathname}#post-${postId}`;
+  document.getElementById('shareLink').textContent = url;
+  document.getElementById('shareModal').classList.add('open');
+}
+function closeModal() { document.getElementById('shareModal').classList.remove('open'); }
+function copyLink() {
+  const link = document.getElementById('shareLink').textContent;
+  navigator.clipboard.writeText(link).then(() => showToast('Link copied!', 'ok'));
+  closeModal();
+}
+
+// ─── ADMIN: IMAGE MODES ───────────────────────────────────────────
+function setImgMode(mode) {
+  imgMode = mode; fileBase64 = null;
+  document.querySelectorAll('.img-opt-btn').forEach((b,i) => b.classList.toggle('active', ['url','upload','none'][i]===mode));
+  document.getElementById('imgUrlGroup').style.display    = mode==='url'    ? 'block' : 'none';
+  document.getElementById('imgUploadGroup').style.display = mode==='upload' ? 'block' : 'none';
+}
+
+function previewImg() {
+  const url = document.getElementById('imgUrlInput').value.trim();
+  const prev = document.getElementById('imgUrlPreview');
+  if (url) { prev.src = url; prev.style.display = 'block'; }
+  else prev.style.display = 'none';
+}
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    fileBase64 = ev.target.result;
+    const prev = document.getElementById('filePreview');
+    prev.src = fileBase64; prev.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function updateChar() {
+  const len = document.getElementById('postText').value.length;
+  document.getElementById('charCount').textContent = `${len} / 2000`;
+}
+
+// ─── ADMIN: PUBLISH ───────────────────────────────────────────────
+async function publishPost() {
+  if (!isAdmin) return;
+  const text = document.getElementById('postText').value.trim();
+  let imageUrl = null;
+
+  if (imgMode === 'url') {
+    imageUrl = document.getElementById('imgUrlInput').value.trim() || null;
+  } else if (imgMode === 'upload' && fileBase64) {
+    // Upload to Supabase Storage
+    const fileName = `post-${Date.now()}.jpg`;
+    const blob = await (await fetch(fileBase64)).blob();
+    const { data: uploaded, error: upErr } = await sb.storage.from('post-images').upload(fileName, blob, { contentType: blob.type });
+    if (upErr) { setStatus('Image upload failed: '+upErr.message, 'err'); return; }
+    const { data: urlData } = sb.storage.from('post-images').getPublicUrl(fileName);
+    imageUrl = urlData.publicUrl;
+  }
+
+  if (!text && !imageUrl) { setStatus('Add some text or an image!', 'err'); return; }
+
+  const btn = document.getElementById('publishBtn');
+  btn.disabled = true; btn.textContent = 'Publishing…';
+  setStatus('', '');
+
+  const { error } = await sb.from('posts').insert({ text: text || null, image_url: imageUrl, author_id: currentUser.id });
+  btn.disabled = false; btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg> Publish Post`;
+
+  if (error) { setStatus('Error: '+error.message, 'err'); return; }
+
+  setStatus('✓ Post published successfully!', 'ok');
+  document.getElementById('postText').value = '';
+  document.getElementById('imgUrlInput').value = '';
+  document.getElementById('imgUrlPreview').style.display = 'none';
+  document.getElementById('filePreview').style.display = 'none';
+  document.getElementById('charCount').textContent = '0 / 2000';
+  fileBase64 = null;
+  loadAdminPosts();
+  showToast('Post published!', 'ok');
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('postStatus');
+  el.textContent = msg;
+  el.className = 'post-status' + (type ? ' '+type : '');
+}
+
+// ─── ADMIN: POSTS LIST ────────────────────────────────────────────
+async function loadAdminPosts() {
+  const container = document.getElementById('adminPostsList');
+  const { data: posts } = await sb.from('posts').select('*, comments(id), likes(id)').order('created_at', { ascending:false });
+  if (!posts || !posts.length) { container.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;">No posts yet.</div>'; return; }
+  container.innerHTML = posts.map(p => {
+    const imgHtml = p.image_url ? `<img class="admin-post-thumb" src="${escHtml(p.image_url)}" onerror="this.style.background='var(--surface2)'"/>` : `<div class="admin-post-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.5rem;">📝</div>`;
+    const text = p.text ? p.text.substring(0,60)+(p.text.length>60?'…':'') : 'Image post';
+    const likes = p.likes?.length || 0;
+    const comments = p.comments?.length || 0;
+    return `<div class="admin-post-item">
+      ${imgHtml}
+      <div class="admin-post-info">
+        <div class="admin-post-text">${escHtml(text)}</div>
+        <div class="admin-post-stats">♥ ${likes} likes · 💬 ${comments} comments</div>
+      </div>
+      <button class="delete-btn" onclick="deletePost('${p.id}')">Delete</button>
+    </div>`;
+  }).join('');
+}
+
+async function deletePost(id) {
+  if (!confirm('Delete this post?')) return;
+  await sb.from('posts').delete().eq('id', id);
+  loadAdminPosts();
+  showToast('Post deleted', 'ok');
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────
+function escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ─── START ────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
